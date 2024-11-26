@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
 
@@ -26,35 +25,44 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
-
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
-        }
-
-        $request->user()->save();
-
-        return Redirect::route('profile.edit')->with('status', 'profile-updated');
-    }
-
-    /**
-     * Delete the user's account.
-     */
-    public function destroy(Request $request): RedirectResponse
-    {
-        $request->validateWithBag('userDeletion', [
-            'password' => ['required', 'current_password'],
-        ]);
-
         $user = $request->user();
 
-        Auth::logout();
+        // Explicitly assign values from the request
+        $user->first_name = $request->input('first_name');
+        $user->last_name = $request->input('last_name');
+        $user->email = $request->input('email');
+        $user->phone_number = $request->input('phone_number');
+        $user->address = $request->input('address');
+        $user->country = $request->input('country');
+        $user->state = $request->input('state');
+        $user->city = $request->input('city');
+        $user->zip_code = $request->input('zip_code');
+        $user->office_phone = $request->input('office_phone');
+        $user->organization = $request->input('organization');
 
-        $user->delete();
+        // Handle profile picture upload
+        if ($request->hasFile('profile_picture')) {
 
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+            $profile_picture = $request->file('profile_picture');
+            $filename = 'users/' . time() . '.' . $profile_picture->getClientOriginalExtension();
+            $profile_picture->move(public_path('storage/users'), $filename);
 
-        return Redirect::to('/');
+            // Remove old profile picture if exists
+            if ($user->profile_picture && file_exists(public_path('storage/' . $user->profile_picture))) {
+                unlink(public_path('storage/' . $user->profile_picture));
+            }
+
+            $user->profile_picture = $filename;
+        }
+
+        // Check if email is dirty (updated)
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
+        }
+
+        // Save the user model
+        $user->save();
+
+        return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }
 }
